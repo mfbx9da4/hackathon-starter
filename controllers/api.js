@@ -129,14 +129,42 @@ exports.getScraping = (req, res, next) => {
  * GitHub API Example.
  */
 exports.getGithub = (req, res, next) => {
+  const token = req.user.tokens.find(token => token.kind === 'github');
   const github = new GitHub();
-  github.repos.get({ user: 'sahat', repo: 'hackathon-starter' }, (err, repo) => {
-    if (err) { return next(err); }
-    res.render('api/github', {
-      title: 'GitHub API',
-      repo
-    });
+  const repoName = 'hackathon-starter';
+  github.authenticate({
+      type: "oauth",
+      token: token.accessToken
   });
+  async.parallel([
+    function (done) {
+      github.repos.get({ owner: 'sahat', repo: repoName}, (err, repo) => {
+        if (err) { return next(err); }
+        let results = {};
+        results['someRepo'] = {
+          title: 'GitHub API',
+          repo
+        };
+        done(null, results)
+      });
+    },
+    function (done) {
+      github.activity.getEventsForUser({username: 'mfbx9da4', per_page: 2}, (err, response) => {
+        if (err) { return next(err); }
+        let results = {activity: response};
+        done(null, results)
+      });
+    }
+  ], (err, results)=> {
+    let out = {};
+    for (var i = 0; i < results.length; i ++) {
+      var item = results[i];
+      for(let key in item) {
+        out[key] = item[key];
+      }
+    }
+    res.render('api/github', out);
+  })
 };
 
 /**

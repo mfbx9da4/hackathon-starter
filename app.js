@@ -21,19 +21,23 @@ const sass = require('node-sass-middleware');
 const multer = require('multer');
 
 const upload = multer({ dest: path.join(__dirname, 'uploads') });
+const PUBLIC_DIR = path.join(__dirname, 'client', 'public');
+const CSS_DIR = path.join(PUBLIC_DIR, 'css');
+const is_test_env = process.env.NODE_ENV === 'test';
 
 /**
  * Load environment variables from .env file, where API keys and passwords are configured.
  */
-dotenv.load({ path: '.env.example' });
+const env_path = is_test_env ? '.env-test' : '.env';
+dotenv.load({ path: env_path });
 
 /**
  * Controllers (route handlers).
  */
 const homeController = require('./controllers/home');
-const userController = require('./controllers/user');
 const apiController = require('./controllers/api');
 const contactController = require('./controllers/contact');
+const userController = require('./controllers/user');
 
 /**
  * API keys and Passport configuration.
@@ -46,26 +50,18 @@ const passportConfig = require('./config/passport');
 const app = express();
 
 /**
- * Connect to MongoDB.
- */
-mongoose.Promise = global.Promise;
-mongoose.connect(process.env.MONGODB_URI || process.env.MONGOLAB_URI);
-mongoose.connection.on('error', () => {
-  console.log('%s MongoDB connection error. Please make sure MongoDB is running.', chalk.red('✗'));
-  process.exit();
-});
-
-/**
  * Express configuration.
  */
+
 app.set('port', process.env.PORT || 3000);
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'pug');
 app.use(expressStatusMonitor());
 app.use(compression());
 app.use(sass({
-  src: path.join(__dirname, 'public'),
-  dest: path.join(__dirname, 'public')
+  src: PUBLIC_DIR,
+  dest: PUBLIC_DIR,
+  outputStyle: 'compressed'
 }));
 app.use(logger('dev'));
 app.use(bodyParser.json());
@@ -84,7 +80,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 app.use(flash());
 app.use((req, res, next) => {
-  if (req.path === '/api/upload') {
+  if (req.path === '/api/upload' || is_test_env) {
     next();
   } else {
     lusca.csrf()(req, res, next);
@@ -110,7 +106,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: 31557600000 }));
+app.use(express.static(PUBLIC_DIR, { maxAge: 31557600000 }));
 
 /**
  * Primary app routes.
@@ -125,13 +121,13 @@ app.get('/reset/:token', userController.getReset);
 app.post('/reset/:token', userController.postReset);
 app.get('/signup', userController.getSignup);
 app.post('/signup', userController.postSignup);
-app.get('/contact', contactController.getContact);
-app.post('/contact', contactController.postContact);
 app.get('/account', passportConfig.isAuthenticated, userController.getAccount);
 app.post('/account/profile', passportConfig.isAuthenticated, userController.postUpdateProfile);
 app.post('/account/password', passportConfig.isAuthenticated, userController.postUpdatePassword);
 app.post('/account/delete', passportConfig.isAuthenticated, userController.postDeleteAccount);
 app.get('/account/unlink/:provider', passportConfig.isAuthenticated, userController.getOauthUnlink);
+app.get('/contact', contactController.getContact);
+app.post('/contact', contactController.postContact);
 
 /**
  * API examples routes.
@@ -219,12 +215,35 @@ app.get('/auth/pinterest/callback', passport.authorize('pinterest', { failureRed
  */
 app.use(errorHandler());
 
-/**
- * Start Express server.
- */
-app.listen(app.get('port'), () => {
-  console.log('%s App is running at http://localhost:%d in %s mode', chalk.green('✓'), app.get('port'), app.get('env')); 
-  console.log('  Press CTRL-C to stop\n');
-});
+app.init = function init() {
+  const promise = new Promise(function(resolve, reject) {
+     /**
+      * Connect to MongoDB.
+      */
+     mongoose.Promise = global.Promise;
+     if (!mongoose.connection.readyState) {
+      mongoose.connect(process.env.MONGODB_URI || process.env.MONGOLAB_URI);
+      mongoose.connection.on('error', (err) => {
+       console.log(err);
+       console.log('%s MongoDB connection error. Please make sure MongoDB is running.', chalk.red('✗'));
+       reject(err);
+       process.exit();
+      });
+    }
+
+
+     /**
+      * Start Express server.
+      */
+
+    console.log('Start express server');
+    app.server = app.listen(app.get('port'), () => {
+      console.log('%s App is running at http://localhost:%d in %s mode', chalk.green('✓'), app.get('port'), app.get('env')); 
+      console.log('  Press CTRL-C to stop\n');
+      resolve();
+    });
+  });
+  return promise;
+}
 
 module.exports = app;

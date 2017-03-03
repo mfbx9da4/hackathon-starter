@@ -20,24 +20,33 @@ block content
     .panel-heading
       h3.panel-title Repository Information
     .panel-body
+      each val, key in activity
+        .row
+          .col-xs-4
+            img(src=`${val.actor.avatar_url}` width='80' height='80')
+          .col-xs-4
+            | #{val.type} #{val.actor.login}
+          .col-xs-4
+            a(href=`${val.repo.url}`)  #{val.repo.name}
+
       .row
         .col-xs-4
           img.img-rounded.img-responsive(src='https://github.global.ssl.fastly.net/images/modules/logos_page/Octocat.png')
         .col-xs-8
           h4
-            a(href='#{repo.html_url}') #{repo.name}
+            a(href='#{someRepo.repo.html_url}') #{someRepo.repo.name}
           ul.list-inline
             li
               i.fa.fa-eye-slash
-              | Subscribers: #{repo.subscribers_count}
+              | Subscribers: #{someRepo.repo.subscribers_count}
             li
               i.fa.fa-star
-              | Starred: #{repo.stargazers_count}
+              | Starred: #{someRepo.repo.stargazers_count}
             li
               i.fa.fa-code-fork
-              | Forks: #{repo.forks_count}
+              | Forks: #{someRepo.repo.forks_count}
             li
               i.fa.fa-code
-              | #{repo.language}
+              | #{someRepo.repo.language}
           strong DESCRIPTION
-          p= repo.description
+          p= someRepo.repo.description
